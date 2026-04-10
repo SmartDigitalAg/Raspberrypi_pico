@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DHT11 Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 24px;
+    }
+    h1 { color: #0ff; text-align: center; margin-bottom: 24px; letter-spacing: 2px; }
+    .cards {
+      display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 32px;
+    }
+    .card {
+      background: #16213e; border: 2px solid #0f3460;
+      border-radius: 16px; padding: 28px 44px; text-align: center; min-width: 160px;
+    }
+    .label { font-size: 0.8rem; color: #888; letter-spacing: 1px; margin-bottom: 8px; }
+    .value { font-size: 3rem; font-weight: bold; }
+    .unit  { font-size: 1.1rem; color: #aaa; }
+    .temp .value { color: #ff6b6b; }
+    .humi .value { color: #4ecdc4; }
+    .updated { text-align: center; color: #555; font-size: 0.8rem; margin-bottom: 28px; }
+    .charts { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+    .chart-box {
+      background: #16213e; border: 1px solid #0f3460;
+      border-radius: 12px; padding: 16px; width: min(480px, 100%);
+    }
+    .chart-box h2 { font-size: 0.9rem; color: #888; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h1>🌡 DHT11 실시간 모니터</h1>
+
+  <div class="cards">
+    <div class="card temp">
+      <div class="label">TEMPERATURE</div>
+      <div class="value" id="temp">--<span class="unit">°C</span></div>
+    </div>
+    <div class="card humi">
+      <div class="label">HUMIDITY</div>
+      <div class="value" id="humi">--<span class="unit">%</span></div>
+    </div>
+  </div>
+  <div class="updated" id="ts">대기 중...</div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h2>온도 추이 (°C)</h2>
+      <canvas id="tempChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h2>습도 추이 (%)</h2>
+      <canvas id="humiChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const makeChart = (id, label, color) => new Chart(document.getElementById(id), {
+      type: 'line',
+      data: { labels: [], datasets: [{ label, data: [],
+        borderColor: color, backgroundColor: color + '22',
+        borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true }] },
+      options: {
+        animation: false,
+        scales: {
+          x: { ticks: { color: '#888', maxTicksLimit: 8 }, grid: { color: '#333' } },
+          y: { ticks: { color: '#888' }, grid: { color: '#333' } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    const tempChart = makeChart('tempChart', '온도', '#ff6b6b');
+    const humiChart = makeChart('humiChart', '습도', '#4ecdc4');
+    const MAX = 50;
+
+    function refresh() {
+      fetch('/data').then(r => r.json()).then(d => {
+        if (d.temp === null) return;
+
+        document.getElementById('temp').innerHTML = parseFloat(d.temp).toFixed(1) + '<span class="unit">°C</span>';
+        document.getElementById('humi').innerHTML = parseFloat(d.humi).toFixed(1) + '<span class="unit">%</span>';
+        document.getElementById('ts').textContent = '마지막 수신: ' + d.time;
+
+        const now = new Date().toLocaleTimeString();
+        [tempChart, humiChart].forEach(c => {
+          if (c.data.labels.length >= MAX) {
+            c.data.labels.shift();
+            c.data.datasets[0].data.shift();
+          }
+        });
+        tempChart.data.labels.push(now);
+        tempChart.data.datasets[0].data.push(parseFloat(d.temp));
+        humiChart.data.labels.push(now);
+        humiChart.data.datasets[0].data.push(parseFloat(d.humi));
+        tempChart.update();
+        humiChart.update();
+      });
+    }
+
+    setInterval(refresh, 5000);
+    refresh();
+  </script>
+</body>
+</html>

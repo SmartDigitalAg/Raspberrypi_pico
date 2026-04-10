@@ -38,17 +38,19 @@
 <body>
   <h1>🌡 DHT11 실시간 모니터</h1>
 
+  <!-- ── 초기값: app.py에서 넘겨준 temp, humi, time 변수 표시 ── -->
   <div class="cards">
     <div class="card temp">
       <div class="label">TEMPERATURE</div>
-      <div class="value" id="temp">--<span class="unit">°C</span></div>
+      <div class="value" id="temp">{{ temp }}<span class="unit">°C</span></div>
     </div>
     <div class="card humi">
       <div class="label">HUMIDITY</div>
-      <div class="value" id="humi">--<span class="unit">%</span></div>
+      <div class="value" id="humi">{{ humi }}<span class="unit">%</span></div>
     </div>
   </div>
-  <div class="updated" id="ts">대기 중...</div>
+  <div class="updated" id="ts">마지막 수신: {{ time }}</div>
+  <!-- ─────────────────────────────────────────────────────────── -->
 
   <div class="charts">
     <div class="chart-box">
@@ -81,14 +83,17 @@
     const humiChart = makeChart('humiChart', '습도', '#4ecdc4');
     const MAX = 50;
 
+    // 5초마다 /data 에서 최신값 가져와서 카드 + 차트 갱신
     function refresh() {
       fetch('/data').then(r => r.json()).then(d => {
         if (d.temp === null) return;
 
+        // 카드 값 갱신
         document.getElementById('temp').innerHTML = parseFloat(d.temp).toFixed(1) + '<span class="unit">°C</span>';
         document.getElementById('humi').innerHTML = parseFloat(d.humi).toFixed(1) + '<span class="unit">%</span>';
-        document.getElementById('ts').textContent = '마지막 수신: ' + d.time;
+        document.getElementById('ts').textContent  = '마지막 수신: ' + d.time;
 
+        // 차트에 데이터 추가
         const now = new Date().toLocaleTimeString();
         [tempChart, humiChart].forEach(c => {
           if (c.data.labels.length >= MAX) {

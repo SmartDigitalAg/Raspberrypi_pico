@@ -26,7 +26,10 @@ def get_data():
 
 @app.route("/")
 def dashboard():
-    return render_template("index.html")
+    temp = latest["temp"] if latest["temp"] is not None else "--"
+    humi = latest["humi"] if latest["humi"] is not None else "--"
+    time = latest["time"] if latest["time"] else "대기 중..."
+    return render_template("index.html", temp=temp, humi=humi, time=time)
 
 if __name__ == "__main__":
     t = threading.Thread(target=fetch_loop, daemon=True)

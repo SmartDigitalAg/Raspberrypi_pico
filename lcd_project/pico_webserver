@@ -1,0 +1,104 @@
+import network
+import socket
+import time
+import json
+from machine import Pin, I2C
+from lcd_project.i2c_lcd import I2cLcd
+from lcd_project.lcd_api import LcdApi
+from dht import DHT11
+
+# ── 설정 ──────────────────────────────────────────
+SSID       = 'iptime'
+PASSWORD   = 'smartfarm'
+SERVER_IP  = '192.168.0.6'   # ← 노트북 IP로 변경
+SERVER_PORT = 8000
+INTERVAL   = 5                # 전송 주기 (초)
+# ──────────────────────────────────────────────────
+
+i2c = I2C(1, sda=Pin(6), scl=Pin(3), freq=100000)
+lcd = I2cLcd(i2c, 0x27, 2, 16)
+dht_sensor = DHT11(Pin(28))
+led = Pin("LED", Pin.OUT)
+
+
+def connect_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    wlan.connect(SSID, PASSWORD)
+    lcd.clear()
+    lcd.putstr("WiFi Connecting.")
+    for _ in range(10):
+        if wlan.status() >= 3:
+            break
+        time.sleep(1)
+    if wlan.status() != 3:
+        lcd.clear()
+        lcd.putstr("WiFi Failed!")
+        return False
+    ip = wlan.ifconfig()[0]
+    lcd.clear()
+    lcd.putstr("Connected!")
+    lcd.move_to(0, 1)
+    lcd.putstr(ip)
+    print(f"피코 IP: {ip}")
+    return True
+
+
+def read_sensor():
+    try:
+        dht_sensor.measure()
+        return dht_sensor.temperature(), dht_sensor.humidity()
+    except:
+        return None, None
+
+
+def post_sensor(temp, humi):
+    """노트북 FastAPI 서버로 센서값 POST 전송"""
+    try:
+        body = json.dumps({"temp": temp, "humi": humi})
+        s = socket.socket()
+        s.settimeout(3)
+        s.connect((SERVER_IP, SERVER_PORT))
+        request = (
+            f"POST /sensor HTTP/1.0\r\n"
+            f"Host: {SERVER_IP}\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            f"\r\n"
+            f"{body}"
+        )
+        s.send(request.encode())
+        s.close()
+        return True
+    except Exception as e:
+        print("전송 실패:", e)
+        return False
+
+
+def display_lcd(temp, humi):
+    lcd.clear()
+    lcd.move_to(0, 0)
+    lcd.putstr(f"T:{temp:.1f}C H:{humi:.0f}%")
+    lcd.move_to(0, 1)
+    lcd.putstr(f"-> {SERVER_IP}")
+
+
+# ── 메인 ──────────────────────────────────────────
+if not connect_wifi():
+    raise SystemExit
+
+time.sleep(2)
+
+while True:
+    temp, humi = read_sensor()
+    if temp is not None:
+        led.value(1)
+        ok = post_sensor(temp, humi)
+        led.value(0)
+        display_lcd(temp, humi)
+        print(f"Temp={temp}°C  Humi={humi}%  전송={'OK' if ok else 'FAIL'}")
+    else:
+        lcd.clear()
+        lcd.putstr("Sensor Error")
+        print("센서 읽기 실패")
+    time.sleep(INTERVAL)
